@@ -5,15 +5,17 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
 
+#include "mqtt.h"
+
 const char* ssid = "UPC0720490";
 const char* password = "x74dbsjnrtnT";
 const char* mqtt_server = "192.168.0.221";
-IPAddress mqttServer(192,168,0,221);
+//IPAddress mqttServer(192,168,0,221);
 
 int LED_BUILTIN = 2;
 
-WiFiClient espClient;
-PubSubClient client(espClient);
+//WiFiClient espClient;
+//PubSubClient client(espClient);
 
 Adafruit_BME280 bme;
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -21,13 +23,15 @@ Adafruit_BME280 bme;
 hw_timer_t *timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
+mqtt mqqtConn;
+
 volatile uint8_t newMesaureTrigger;
 
 void IRAM_ATTR onTimer() {
   newMesaureTrigger = 1;
   Serial.print("hi \n");
 }
-
+/*
 void callback(char* topic, byte* message, unsigned int length) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
@@ -108,7 +112,7 @@ void printValues() {
 
   Serial.println();
 }
-
+*/
 void setup() {
   pinMode (LED_BUILTIN, OUTPUT);
   Serial.begin(9600);
@@ -126,8 +130,8 @@ void setup() {
   Serial.print("Connected ");
   Serial.println(WiFi.localIP());
 
-  client.setServer(mqttServer, 1884);
-  client.setCallback(callback);
+  //client.setServer(mqttServer, 1884);
+  //client.setCallback(callback);
 
   if(!bme.begin(0x76)){
     Serial.print("couldn't connect with bme sensor");
@@ -135,29 +139,27 @@ void setup() {
   }else
     Serial.print("Connected with BME 280 ");
 
-  timer = timerBegin(0, 240, true);
+  timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &onTimer, true);
   timerAlarmWrite(timer, 5000000, true);
   timerAlarmEnable(timer);
-
   newMesaureTrigger = 0;
-
 }
 
 void loop() {
-    if (!client.connected()) {
-    reconnect();
+    if (!mqqtConn.isConnected()) {
+      mqqtConn.reconnect();
+    //reconnect();
   }
-  client.loop();
+  //client.loop();
+  mqqtConn.loop();
 
   if(newMesaureTrigger){
     newMesaureTrigger = 0;
-    printValues();
+    float readTemp = bme.readTemperature();
+    float readPressure = bme.readPressure() / 100.0F;
+    float readHumidity = bme.readHumidity();
+    mqqtConn.publishBME280stat(readTemp, readPressure, readHumidity);
+    //printValues();
   }
-/*
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(1000);
-*/
 }
